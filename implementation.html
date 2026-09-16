@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Implementation Lab — AES Research Lab</title><link rel="stylesheet" href="styles.css"></head><body>
+<nav class="nav"></nav><header class="hero"><div class="scribble">RTL<br>CPU<br>FPGA</div><div class="kicker">Branch 02 · build zone</div><h1>IMPLEMENTATION<br><span class="marker">LAB</span></h1><p class="lead">This page is intentionally separate from the literature review. It is the home for the actual implementation: RISC-V core, Verilog/SystemVerilog, crypto accelerator, interfaces, simulation and hardware results.</p></header>
+<main class="wrap">
+<section class="section"><div class="sectitle"><span class="num">01</span><h2>Architecture board</h2></div>
+<div class="flow"><div class="node">RISC-V Core</div><div class="arrow">→</div><div class="node">Bus / Interface</div><div class="arrow">→</div><div class="node">Crypto Accelerator</div><div class="arrow">→</div><div class="node">GF / S-box / AES</div><div class="arrow">→</div><div class="node">FPGA / SoC</div></div>
+<div class="callout good">Later, this board can be made clickable: CPU → core source; bus → interface RTL; accelerator → AES/GF modules; FPGA → constraints/bitstream/results.</div></section>
+<section class="section"><div class="sectitle"><span class="num">02</span><h2>RISC-V core</h2></div><div class="grid">
+<div class="card"><h3>Core source</h3><p>Place the RISC-V RTL, configuration and submodules here.</p><div class="codeplaceholder">/implementation/riscv-core/<br>├── rtl/<br>├── include/<br>├── tb/<br>└── README.md</div></div>
+<div class="card"><h3>ISA / crypto interface</h3><p>Document whether the project uses a custom coprocessor interface, custom instructions, standard Zkne/Zknd/Zbc-style concepts, or a memory-mapped accelerator.</p></div>
+</div></section>
+<section class="section"><div class="sectitle"><span class="num">03</span><h2>Verilog / SystemVerilog modules</h2></div><div class="grid">
+<div class="card"><h3>AES top</h3><div class="codeplaceholder">Drop AES top-level RTL here.</div></div>
+<div class="card"><h3>S-box / inverse S-box</h3><div class="codeplaceholder">Drop optimized S-box RTL here.</div></div>
+<div class="card"><h3>GF engine</h3><div class="codeplaceholder">Drop GF multiplier / CLMUL / shared arithmetic RTL here.</div></div>
+<div class="card"><h3>Key expansion</h3><div class="codeplaceholder">Drop key-schedule RTL here.</div></div>
+</div></section>
+<section class="section"><div class="sectitle"><span class="num">04</span><h2>Verification</h2></div><div class="grid">
+<div class="card"><h3>Testbench</h3><div class="codeplaceholder">/implementation/tb/</div></div>
+<div class="card"><h3>Known-answer tests</h3><p>AES-128/192/256 vectors, encryption/decryption and edge cases.</p></div>
+<div class="card"><h3>Waveforms</h3><div class="codeplaceholder">Upload GTKWave / Vivado / Questa screenshots here.</div></div>
+<div class="card"><h3>Formal / assertions</h3><div class="codeplaceholder">Assertions, equivalence checks and protocol properties.</div></div>
+</div></section>
+<section class="section"><div class="sectitle"><span class="num">05</span><h2>Implementation results</h2></div>
+<div class="statgrid"><div class="stat"><b>—</b><span>LUTs</span></div><div class="stat"><b>—</b><span>FFs</span></div><div class="stat"><b>—</b><span>BRAM</span></div><div class="stat"><b>—</b><span>Fmax</span></div><div class="stat"><b>—</b><span>Throughput</span></div><div class="stat"><b>—</b><span>Power</span></div></div>
+<p class="small">These placeholders are deliberately not filled with literature numbers. Once your implementation is synthesized, this page should contain only your measured results.</p></section>
+<section class="section"><div class="sectitle"><span class="num">06</span><h2>Suggested project tree</h2></div>
+<pre>implementation/
+├── riscv-core/
+├── crypto/
+│   ├── aes/
+│   ├── sbox/
+│   ├── gf/
+│   └── key_schedule/
+├── bus/
+├── tb/
+├── constraints/
+├── sim/
+├── synthesis/
+├── fpga/
+└── docs/
+</pre></section>
+</main><footer>Implementation Lab · ready for the Verilog/RISC-V work that comes next.</footer><script src="data.js"></script><script src="app.js"></script></body></html>
