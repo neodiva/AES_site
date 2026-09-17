@@ -1,42 +1,1056 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Implementation Lab — AES Research Lab</title><link rel="stylesheet" href="styles.css"></head><body>
-<nav class="nav"></nav><header class="hero"><div class="scribble">RTL<br>CPU<br>FPGA</div><div class="kicker">Branch 02 · build zone</div><h1>IMPLEMENTATION<br><span class="marker">LAB</span></h1><p class="lead">This page is intentionally separate from the literature review. It is the home for the actual implementation: RISC-V core, Verilog/SystemVerilog, crypto accelerator, interfaces, simulation and hardware results.</p></header>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Implementation Lab — CV32E40P × AES Accelerator</title>
+<style>
+:root{--bg:#f5f0e6;--ink:#171717;--muted:#5c5a55;--card:#fffdf7;--line:#1c1c1c;--cyan:#bfeef1;--pink:#ffd0df;--lime:#dff39b;--yellow:#ffe58a}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;line-height:1.55}
+nav{position:sticky;top:0;z-index:20;background:#171717;color:#fff;padding:12px 5%;display:flex;gap:18px;flex-wrap:wrap;border-bottom:3px solid #000}
+nav a{color:#fff;text-decoration:none;font-weight:800;font-size:12px;letter-spacing:.08em}
+.hero{padding:70px 7% 55px;border-bottom:4px solid var(--line);background:var(--cyan)}
+.kicker,.label{font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+h1{font-size:clamp(42px,8vw,92px);line-height:.88;margin:18px 0}
+h2{font-size:30px;margin:0 0 18px} h3{margin-top:0}
+.lead{max-width:950px;font-size:19px}
+.wrap{max-width:1250px;margin:auto;padding:35px 5% 80px}
+.section{margin:35px 0;padding:28px;background:var(--card);border:3px solid var(--line);box-shadow:7px 7px 0 #000}
+.section > .section{box-shadow:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+.card,.step{padding:20px;border:2px solid var(--line);background:#fff}
+.callout{padding:18px;border-left:8px solid var(--line);background:var(--yellow);margin:18px 0}
+.good{background:var(--lime)} .warn{background:var(--pink)}
+.flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.node{padding:12px 15px;border:2px solid #000;background:#fff;font-weight:900}
+.arrow{font-size:24px;font-weight:900}
+table{width:100%;border-collapse:collapse;background:#fff;font-size:14px}
+th,td{border:1.5px solid #222;padding:10px;vertical-align:top;text-align:left}
+th{background:#171717;color:#fff}
+code,.mono,pre{font-family:"SFMono-Regular",Consolas,Monaco,monospace}
+pre{background:#111;color:#f7f7f7;padding:18px;overflow:auto;border-radius:6px;white-space:pre;max-height:680px}
+code{background:#eee;padding:2px 5px;border-radius:3px}
+.small{color:var(--muted);font-size:13px}
+.badge{display:inline-block;padding:5px 9px;border:2px solid #111;margin:4px 4px 4px 0;font-weight:800;font-size:12px}
+.sticky{position:sticky;top:55px;z-index:10;background:#fff;border:2px solid #111;padding:12px;margin-bottom:15px}
+details{border:2px solid #222;margin:10px 0;background:#fff}
+summary{cursor:pointer;padding:12px;font-weight:900;background:#f0ede4}
+.stepno{font-size:34px;font-weight:1000}
+a{color:#064f57}
+.cmd{display:block;background:#111;color:#fff;padding:14px;border-radius:5px;overflow:auto}
+.ok{font-weight:900}.check{font-size:18px}
+footer{padding:35px 5%;background:#171717;color:#fff}
+</style>
+</head>
+<body>
+<nav>
+<a href="index.html">HOME</a>
+<a href="literature.html">LITERATURE</a>
+<a href="implementation.html">IMPLEMENTATION LAB</a>
+<a href="#flow">FLOW</a>
+<a href="#novelty">NOVELTY</a>
+<a href="#rtl">RTL</a>
+<a href="#vivado">VIVADO</a>
+</nav>
+
+<header class="hero">
+<div class="kicker">Branch 02 · reproducible hardware workflow</div>
+<h1>CV32E40P × AES<br>IMPLEMENTATION LAB</h1>
+<p class="lead"><b>Research-level build plan:</b> OpenHW CV32E40P → WSL2/Linux verification → OBI memory system → OBI-to-AXI bridge → custom AES accelerator → Vivado IP Integrator → synthesis → implementation → timing/PPA → bitstream → Nexys A7-100T → ILA/hardware validation.</p>
+<div>
+<span class="badge">RV32IM[F|Zfinx]C + PULP extensions</span>
+<span class="badge">OBI</span>
+<span class="badge">AXI4 / AXI4-Lite</span>
+<span class="badge">AES-128</span>
+<span class="badge">Artix-7</span>
+</div>
+</header>
+
 <main class="wrap">
-<section class="section"><div class="sectitle"><span class="num">01</span><h2>Architecture board</h2></div>
-<div class="flow"><div class="node">RISC-V Core</div><div class="arrow">→</div><div class="node">Bus / Interface</div><div class="arrow">→</div><div class="node">Crypto Accelerator</div><div class="arrow">→</div><div class="node">GF / S-box / AES</div><div class="arrow">→</div><div class="node">FPGA / SoC</div></div>
-<div class="callout good">Later, this board can be made clickable: CPU → core source; bus → interface RTL; accelerator → AES/GF modules; FPGA → constraints/bitstream/results.</div></section>
-<section class="section"><div class="sectitle"><span class="num">02</span><h2>RISC-V core</h2></div><div class="grid">
-<div class="card"><h3>Core source</h3><p>Place the RISC-V RTL, configuration and submodules here.</p><div class="codeplaceholder">/implementation/riscv-core/<br>├── rtl/<br>├── include/<br>├── tb/<br>└── README.md</div></div>
-<div class="card"><h3>ISA / crypto interface</h3><p>Document whether the project uses a custom coprocessor interface, custom instructions, standard Zkne/Zknd/Zbc-style concepts, or a memory-mapped accelerator.</p></div>
-</div></section>
-<section class="section"><div class="sectitle"><span class="num">03</span><h2>Verilog / SystemVerilog modules</h2></div><div class="grid">
-<div class="card"><h3>AES top</h3><div class="codeplaceholder">Drop AES top-level RTL here.</div></div>
-<div class="card"><h3>S-box / inverse S-box</h3><div class="codeplaceholder">Drop optimized S-box RTL here.</div></div>
-<div class="card"><h3>GF engine</h3><div class="codeplaceholder">Drop GF multiplier / CLMUL / shared arithmetic RTL here.</div></div>
-<div class="card"><h3>Key expansion</h3><div class="codeplaceholder">Drop key-schedule RTL here.</div></div>
-</div></section>
-<section class="section"><div class="sectitle"><span class="num">04</span><h2>Verification</h2></div><div class="grid">
-<div class="card"><h3>Testbench</h3><div class="codeplaceholder">/implementation/tb/</div></div>
-<div class="card"><h3>Known-answer tests</h3><p>AES-128/192/256 vectors, encryption/decryption and edge cases.</p></div>
-<div class="card"><h3>Waveforms</h3><div class="codeplaceholder">Upload GTKWave / Vivado / Questa screenshots here.</div></div>
-<div class="card"><h3>Formal / assertions</h3><div class="codeplaceholder">Assertions, equivalence checks and protocol properties.</div></div>
-</div></section>
-<section class="section"><div class="sectitle"><span class="num">05</span><h2>Implementation results</h2></div>
-<div class="statgrid"><div class="stat"><b>—</b><span>LUTs</span></div><div class="stat"><b>—</b><span>FFs</span></div><div class="stat"><b>—</b><span>BRAM</span></div><div class="stat"><b>—</b><span>Fmax</span></div><div class="stat"><b>—</b><span>Throughput</span></div><div class="stat"><b>—</b><span>Power</span></div></div>
-<p class="small">These placeholders are deliberately not filled with literature numbers. Once your implementation is synthesized, this page should contain only your measured results.</p></section>
-<section class="section"><div class="sectitle"><span class="num">06</span><h2>Suggested project tree</h2></div>
-<pre>implementation/
-├── riscv-core/
-├── crypto/
+
+<section class="section" id="novelty">
+<h2>01 · Selected research direction</h2>
+<div class="callout good">
+<b>Proposed project direction:</b> <u>Configurable RISC-V AES accelerator built around reusable GF arithmetic, evaluated through a PPA × security design-space exploration.</u>
+</div>
+<p>This is not presented as an already-proven novel invention. It is the research direction selected from the site's novelty hub because it combines several gaps already identified there instead of stopping at another S-box-only optimization.</p>
+<div class="grid">
+<div class="card"><h3>Baseline</h3><p>Iterative AES-128 encryption engine with a LUT S-box, one round per cycle, explicit key schedule and a small accelerator control interface.</p></div>
+<div class="card"><h3>Research upgrade A</h3><p>Replace the LUT S-box with a composite/tower-field implementation and expose the GF arithmetic as a reusable internal engine.</p></div>
+<div class="card"><h3>Research upgrade B</h3><p>Introduce configurable sharing/pipelining modes. Measure area, Fmax, latency, throughput and dynamic power for each configuration.</p></div>
+<div class="card"><h3>Research upgrade C</h3><p>Add a defined side-channel evaluation plan. Report the attack model, traces, leakage metric and overhead rather than claiming universal security.</p></div>
+</div>
+<p><b>Positioning logic from your novelty hub:</b> S-box-only optimization is crowded; RISC-V AES acceleration and shared AES engines already exist; reusable GF arithmetic, PPA/security interaction and architecture-level automation remain useful axes to combine.</p>
+</section>
+
+<section class="section" id="flow">
+<h2>02 · Master flow — do not skip the checkpoints</h2>
+<div class="flow">
+<div class="node">Windows</div><div class="arrow">→</div>
+<div class="node">WSL2 + Ubuntu</div><div class="arrow">→</div>
+<div class="node">CV32E40P Git</div><div class="arrow">→</div>
+<div class="node">RTL simulation</div><div class="arrow">→</div>
+<div class="node">OBI memory system</div><div class="arrow">→</div>
+<div class="node">OBI → AXI</div><div class="arrow">→</div>
+<div class="node">AES IP</div><div class="arrow">→</div>
+<div class="node">Vivado</div><div class="arrow">→</div>
+<div class="node">Nexys A7</div>
+</div>
+<div class="callout warn"><b>Important:</b> Do not start with CV32E40P + AXI + AES + FPGA simultaneously. First prove the AES RTL. Then prove CV32E40P memory transactions. Then bridge OBI to AXI. Then integrate the accelerator. Each stage gets a pass/fail result.</div>
+</section>
+
+<section class="section">
+<h2>03 · Hardware/software/tool stack</h2>
+<table>
+<tr><th>Layer</th><th>Tool / artifact</th><th>Purpose</th></tr>
+<tr><td>OS</td><td>Windows 11 + WSL2 Ubuntu</td><td>Linux-native RTL build, scripts and verification.</td></tr>
+<tr><td>Source control</td><td>Git + GitHub</td><td>Version every RTL, testbench, constraint and result.</td></tr>
+<tr><td>CPU RTL</td><td>OpenHW CV32E40P</td><td>RV32 RISC-V processor core.</td></tr>
+<tr><td>Simulation</td><td>Verilator</td><td>Fast lint/simulation and C++/SystemVerilog-driven verification.</td></tr>
+<tr><td>Simulation fallback</td><td>Icarus Verilog</td><td>Simple Verilog/SystemVerilog regression checks.</td></tr>
+<tr><td>Waveforms</td><td>GTKWave / Vivado simulator</td><td>Inspect clocks, handshakes and AES state.</td></tr>
+<tr><td>FPGA design</td><td>AMD Vivado</td><td>IP Integrator, synthesis, implementation, timing, bitstream and ILA.</td></tr>
+<tr><td>Hardware</td><td>Nexys A7-100T</td><td>Artix-7 XC7A100T target with substantial logic/BRAM and USB-JTAG/UART.</td></tr>
+<tr><td>Optional software</td><td>Vitis</td><td>Only after the hardware platform is exported and you actually need a software/application layer.</td></tr>
+</table>
+</section>
+
+<section class="section">
+<h2>04 · Step 1 — install WSL2 on Windows</h2>
+<div class="step"><span class="stepno">1A</span><p>Open <b>PowerShell as Administrator</b>:</p><pre>wsl --install -d Ubuntu-24.04
+wsl --update</pre><p>Restart Windows if prompted. Launch Ubuntu from the Start menu and create the Linux username/password.</p></div>
+<div class="step"><span class="stepno">1B</span><p>Inside Ubuntu:</p><pre>sudo apt update
+sudo apt upgrade -y
+sudo apt install -y git make gcc g++ python3 python3-pip \
+  verilator iverilog gtkwave build-essential</pre></div>
+<div class="step"><span class="stepno">1C</span><p>Verify:</p><pre>git --version
+verilator --version
+iverilog -V
+gtkwave --version</pre></div>
+<div class="callout"><b>Vivado stays on Windows.</b> WSL is your Linux verification/build environment. You do not need to run the Windows Vivado GUI inside WSL.</div>
+</section>
+
+<section class="section">
+<h2>05 · Step 2 — clone the CV32E40P repository</h2>
+<pre>mkdir -p ~/aes_riscv
+cd ~/aes_riscv
+git clone https://github.com/openhwgroup/cv32e40p.git
+cd cv32e40p
+git status
+git branch --show-current</pre>
+<p>The current repository contains <code>rtl/</code>, <code>constraints/</code>, <code>example_tb/</code>, <code>bhv/</code>, <code>scripts/</code>, <code>sva/</code>, the manifest files and documentation. Do not copy only <code>cv32e40p_top.sv</code> and assume that is the whole core.</p>
+<div class="grid">
+<div class="card"><h3>Use directly</h3><p><code>rtl/</code>, <code>rtl/include/</code>, the appropriate manifest, <code>bhv/</code> for simulation-only clock-gating support, and the repository's example/constraint material as references.</p></div>
+<div class="card"><h3>Study first</h3><p><code>docs/source/integration.rst</code> or the rendered user manual. The documented top-level is <code>cv32e40p_top</code>.</p></div>
+<div class="card"><h3>Do not modify initially</h3><p>Keep the upstream core untouched. Put your project in a separate repository/folder and add the CV32E40P as a dependency/submodule or pinned clone.</p></div>
+</div>
+</section>
+
+<section class="section">
+<h2>06 · Step 3 — understand the exact CV32E40P boundary</h2>
+<p>The core exposes separate instruction and data memory interfaces. The important signals for the first integration are:</p>
+<pre>Instruction:
+  instr_req_o
+  instr_gnt_i
+  instr_rvalid_i
+  instr_addr_o
+  instr_rdata_i
+
+Data:
+  data_req_o
+  data_gnt_i
+  data_rvalid_i
+  data_addr_o
+  data_we_o
+  data_be_o
+  data_wdata_o
+  data_rdata_i</pre>
+<div class="callout good"><b>Key architectural fact:</b> CV32E40P uses OBI-style memory interfaces. Vivado's AXI ecosystem does not make these ports magically become AXI. Your integration layer must perform the protocol conversion.</div>
+</section>
+
+<section class="section">
+<h2>07 · Step 4 — make a minimal CPU memory system BEFORE AES</h2>
+<p>Build this first:</p>
+<pre>                    +----------------------+
+                    |      CV32E40P        |
+                    |   4-stage RISC-V      |
+                    +-----------+----------+
+                                |
+                  +-------------+-------------+
+                  |                           |
+              instr OBI                    data OBI
+                  |                           |
+                  v                           v
+          +---------------+           +---------------+
+          | instruction   |           | data memory   |
+          | memory model  |           | / peripheral  |
+          +---------------+           +---------------+</pre>
+<p>For simulation, use a behavioral memory model. Your first pass does not need AXI at all. The objective is simply: reset → fetch → execute a tiny program → load/store → halt or signal PASS.</p>
+<div class="callout warn"><b>Checkpoint A:</b> If the CPU cannot fetch and execute from an OBI memory model, stop here. Do not debug AXI and AES simultaneously.</div>
+</section>
+
+<section class="section">
+<h2>08 · Step 5 — create the project repository</h2>
+<pre>cd ~/aes_riscv
+mkdir cv32e40p_aes
+cd cv32e40p_aes
+
+mkdir -p rtl/aes rtl/bus rtl/soc rtl/bridge
+mkdir -p tb sim sw constraints vivado results docs
+
+touch README.md
+git init</pre>
+<p>Recommended tree:</p>
+<pre>cv32e40p_aes/
+├── rtl/
 │   ├── aes/
-│   ├── sbox/
-│   ├── gf/
-│   └── key_schedule/
-├── bus/
+│   │   ├── aes128_iterative.sv
+│   │   └── aes_axi4lite.sv          # later
+│   ├── bridge/
+│   │   └── obi_to_axi4lite.sv       # later
+│   └── soc/
+│       ├── cv32e40p_system.sv
+│       └── memories.sv
 ├── tb/
+│   ├── aes128_tb.sv
+│   └── soc_tb.sv
 ├── constraints/
+│   └── nexys_a7_100t.xdc
+├── vivado/
+│   └── create_project.tcl
+├── sw/
 ├── sim/
-├── synthesis/
-├── fpga/
-└── docs/
-</pre></section>
-</main><footer>Implementation Lab · ready for the Verilog/RISC-V work that comes next.</footer><script src="data.js"></script><script src="app.js"></script></body></html>
+├── results/
+│   ├── synthesis/
+│   ├── timing/
+│   └── power/
+└── README.md</pre>
+</section>
+
+<section class="section" id="rtl">
+<h2>09 · Step 6 — baseline AES-128 encryption RTL</h2>
+<p>This is the <b>baseline</b>, not the final novelty. It is deliberately simple so that the later research modifications have a measurable reference.</p>
+<p>Architecture: initial AddRoundKey + 10 AES rounds; one round is processed per clock while busy; the final round omits MixColumns. The interface can later sit behind an AXI4-Lite register file.</p>
+<details open><summary>aes128_iterative.sv — complete baseline RTL</summary>
+<pre>// AES-128 iterative encryption core
+// Baseline implementation for the AES Research Lab / CV32E40P project.
+// Interface is intentionally accelerator-friendly: start/busy/done + 128-bit block/key.
+// Byte ordering: input/output vectors are the standard AES hexadecimal order.
+// Test vector:
+// key = 000102030405060708090a0b0c0d0e0f
+// pt  = 00112233445566778899aabbccddeeff
+// ct  = 69c4e0d86a7b0430d8cdb78070b4c55a
+
+module aes128_iterative (
+    input  logic         clk,
+    input  logic         rst_ni,
+    input  logic         start_i,
+    input  logic [127:0] key_i,
+    input  logic [127:0] block_i,
+    output logic [127:0] block_o,
+    output logic         busy_o,
+    output logic         done_o
+);
+
+  logic [127:0] state_q, round_key_q;
+  logic [3:0]   round_q;
+
+  function automatic [7:0] sbox(input [7:0] a);
+    begin
+      case (a)
+      8&#x27;h00: sbox = 8&#x27;h63;
+      8&#x27;h01: sbox = 8&#x27;h7c;
+      8&#x27;h02: sbox = 8&#x27;h77;
+      8&#x27;h03: sbox = 8&#x27;h7b;
+      8&#x27;h04: sbox = 8&#x27;hf2;
+      8&#x27;h05: sbox = 8&#x27;h6b;
+      8&#x27;h06: sbox = 8&#x27;h6f;
+      8&#x27;h07: sbox = 8&#x27;hc5;
+      8&#x27;h08: sbox = 8&#x27;h30;
+      8&#x27;h09: sbox = 8&#x27;h01;
+      8&#x27;h0a: sbox = 8&#x27;h67;
+      8&#x27;h0b: sbox = 8&#x27;h2b;
+      8&#x27;h0c: sbox = 8&#x27;hfe;
+      8&#x27;h0d: sbox = 8&#x27;hd7;
+      8&#x27;h0e: sbox = 8&#x27;hab;
+      8&#x27;h0f: sbox = 8&#x27;h76;
+      8&#x27;h10: sbox = 8&#x27;hca;
+      8&#x27;h11: sbox = 8&#x27;h82;
+      8&#x27;h12: sbox = 8&#x27;hc9;
+      8&#x27;h13: sbox = 8&#x27;h7d;
+      8&#x27;h14: sbox = 8&#x27;hfa;
+      8&#x27;h15: sbox = 8&#x27;h59;
+      8&#x27;h16: sbox = 8&#x27;h47;
+      8&#x27;h17: sbox = 8&#x27;hf0;
+      8&#x27;h18: sbox = 8&#x27;had;
+      8&#x27;h19: sbox = 8&#x27;hd4;
+      8&#x27;h1a: sbox = 8&#x27;ha2;
+      8&#x27;h1b: sbox = 8&#x27;haf;
+      8&#x27;h1c: sbox = 8&#x27;h9c;
+      8&#x27;h1d: sbox = 8&#x27;ha4;
+      8&#x27;h1e: sbox = 8&#x27;h72;
+      8&#x27;h1f: sbox = 8&#x27;hc0;
+      8&#x27;h20: sbox = 8&#x27;hb7;
+      8&#x27;h21: sbox = 8&#x27;hfd;
+      8&#x27;h22: sbox = 8&#x27;h93;
+      8&#x27;h23: sbox = 8&#x27;h26;
+      8&#x27;h24: sbox = 8&#x27;h36;
+      8&#x27;h25: sbox = 8&#x27;h3f;
+      8&#x27;h26: sbox = 8&#x27;hf7;
+      8&#x27;h27: sbox = 8&#x27;hcc;
+      8&#x27;h28: sbox = 8&#x27;h34;
+      8&#x27;h29: sbox = 8&#x27;ha5;
+      8&#x27;h2a: sbox = 8&#x27;he5;
+      8&#x27;h2b: sbox = 8&#x27;hf1;
+      8&#x27;h2c: sbox = 8&#x27;h71;
+      8&#x27;h2d: sbox = 8&#x27;hd8;
+      8&#x27;h2e: sbox = 8&#x27;h31;
+      8&#x27;h2f: sbox = 8&#x27;h15;
+      8&#x27;h30: sbox = 8&#x27;h04;
+      8&#x27;h31: sbox = 8&#x27;hc7;
+      8&#x27;h32: sbox = 8&#x27;h23;
+      8&#x27;h33: sbox = 8&#x27;hc3;
+      8&#x27;h34: sbox = 8&#x27;h18;
+      8&#x27;h35: sbox = 8&#x27;h96;
+      8&#x27;h36: sbox = 8&#x27;h05;
+      8&#x27;h37: sbox = 8&#x27;h9a;
+      8&#x27;h38: sbox = 8&#x27;h07;
+      8&#x27;h39: sbox = 8&#x27;h12;
+      8&#x27;h3a: sbox = 8&#x27;h80;
+      8&#x27;h3b: sbox = 8&#x27;he2;
+      8&#x27;h3c: sbox = 8&#x27;heb;
+      8&#x27;h3d: sbox = 8&#x27;h27;
+      8&#x27;h3e: sbox = 8&#x27;hb2;
+      8&#x27;h3f: sbox = 8&#x27;h75;
+      8&#x27;h40: sbox = 8&#x27;h09;
+      8&#x27;h41: sbox = 8&#x27;h83;
+      8&#x27;h42: sbox = 8&#x27;h2c;
+      8&#x27;h43: sbox = 8&#x27;h1a;
+      8&#x27;h44: sbox = 8&#x27;h1b;
+      8&#x27;h45: sbox = 8&#x27;h6e;
+      8&#x27;h46: sbox = 8&#x27;h5a;
+      8&#x27;h47: sbox = 8&#x27;ha0;
+      8&#x27;h48: sbox = 8&#x27;h52;
+      8&#x27;h49: sbox = 8&#x27;h3b;
+      8&#x27;h4a: sbox = 8&#x27;hd6;
+      8&#x27;h4b: sbox = 8&#x27;hb3;
+      8&#x27;h4c: sbox = 8&#x27;h29;
+      8&#x27;h4d: sbox = 8&#x27;he3;
+      8&#x27;h4e: sbox = 8&#x27;h2f;
+      8&#x27;h4f: sbox = 8&#x27;h84;
+      8&#x27;h50: sbox = 8&#x27;h53;
+      8&#x27;h51: sbox = 8&#x27;hd1;
+      8&#x27;h52: sbox = 8&#x27;h00;
+      8&#x27;h53: sbox = 8&#x27;hed;
+      8&#x27;h54: sbox = 8&#x27;h20;
+      8&#x27;h55: sbox = 8&#x27;hfc;
+      8&#x27;h56: sbox = 8&#x27;hb1;
+      8&#x27;h57: sbox = 8&#x27;h5b;
+      8&#x27;h58: sbox = 8&#x27;h6a;
+      8&#x27;h59: sbox = 8&#x27;hcb;
+      8&#x27;h5a: sbox = 8&#x27;hbe;
+      8&#x27;h5b: sbox = 8&#x27;h39;
+      8&#x27;h5c: sbox = 8&#x27;h4a;
+      8&#x27;h5d: sbox = 8&#x27;h4c;
+      8&#x27;h5e: sbox = 8&#x27;h58;
+      8&#x27;h5f: sbox = 8&#x27;hcf;
+      8&#x27;h60: sbox = 8&#x27;hd0;
+      8&#x27;h61: sbox = 8&#x27;hef;
+      8&#x27;h62: sbox = 8&#x27;haa;
+      8&#x27;h63: sbox = 8&#x27;hfb;
+      8&#x27;h64: sbox = 8&#x27;h43;
+      8&#x27;h65: sbox = 8&#x27;h4d;
+      8&#x27;h66: sbox = 8&#x27;h33;
+      8&#x27;h67: sbox = 8&#x27;h85;
+      8&#x27;h68: sbox = 8&#x27;h45;
+      8&#x27;h69: sbox = 8&#x27;hf9;
+      8&#x27;h6a: sbox = 8&#x27;h02;
+      8&#x27;h6b: sbox = 8&#x27;h7f;
+      8&#x27;h6c: sbox = 8&#x27;h50;
+      8&#x27;h6d: sbox = 8&#x27;h3c;
+      8&#x27;h6e: sbox = 8&#x27;h9f;
+      8&#x27;h6f: sbox = 8&#x27;ha8;
+      8&#x27;h70: sbox = 8&#x27;h51;
+      8&#x27;h71: sbox = 8&#x27;ha3;
+      8&#x27;h72: sbox = 8&#x27;h40;
+      8&#x27;h73: sbox = 8&#x27;h8f;
+      8&#x27;h74: sbox = 8&#x27;h92;
+      8&#x27;h75: sbox = 8&#x27;h9d;
+      8&#x27;h76: sbox = 8&#x27;h38;
+      8&#x27;h77: sbox = 8&#x27;hf5;
+      8&#x27;h78: sbox = 8&#x27;hbc;
+      8&#x27;h79: sbox = 8&#x27;hb6;
+      8&#x27;h7a: sbox = 8&#x27;hda;
+      8&#x27;h7b: sbox = 8&#x27;h21;
+      8&#x27;h7c: sbox = 8&#x27;h10;
+      8&#x27;h7d: sbox = 8&#x27;hff;
+      8&#x27;h7e: sbox = 8&#x27;hf3;
+      8&#x27;h7f: sbox = 8&#x27;hd2;
+      8&#x27;h80: sbox = 8&#x27;hcd;
+      8&#x27;h81: sbox = 8&#x27;h0c;
+      8&#x27;h82: sbox = 8&#x27;h13;
+      8&#x27;h83: sbox = 8&#x27;hec;
+      8&#x27;h84: sbox = 8&#x27;h5f;
+      8&#x27;h85: sbox = 8&#x27;h97;
+      8&#x27;h86: sbox = 8&#x27;h44;
+      8&#x27;h87: sbox = 8&#x27;h17;
+      8&#x27;h88: sbox = 8&#x27;hc4;
+      8&#x27;h89: sbox = 8&#x27;ha7;
+      8&#x27;h8a: sbox = 8&#x27;h7e;
+      8&#x27;h8b: sbox = 8&#x27;h3d;
+      8&#x27;h8c: sbox = 8&#x27;h64;
+      8&#x27;h8d: sbox = 8&#x27;h5d;
+      8&#x27;h8e: sbox = 8&#x27;h19;
+      8&#x27;h8f: sbox = 8&#x27;h73;
+      8&#x27;h90: sbox = 8&#x27;h60;
+      8&#x27;h91: sbox = 8&#x27;h81;
+      8&#x27;h92: sbox = 8&#x27;h4f;
+      8&#x27;h93: sbox = 8&#x27;hdc;
+      8&#x27;h94: sbox = 8&#x27;h22;
+      8&#x27;h95: sbox = 8&#x27;h2a;
+      8&#x27;h96: sbox = 8&#x27;h90;
+      8&#x27;h97: sbox = 8&#x27;h88;
+      8&#x27;h98: sbox = 8&#x27;h46;
+      8&#x27;h99: sbox = 8&#x27;hee;
+      8&#x27;h9a: sbox = 8&#x27;hb8;
+      8&#x27;h9b: sbox = 8&#x27;h14;
+      8&#x27;h9c: sbox = 8&#x27;hde;
+      8&#x27;h9d: sbox = 8&#x27;h5e;
+      8&#x27;h9e: sbox = 8&#x27;h0b;
+      8&#x27;h9f: sbox = 8&#x27;hdb;
+      8&#x27;ha0: sbox = 8&#x27;he0;
+      8&#x27;ha1: sbox = 8&#x27;h32;
+      8&#x27;ha2: sbox = 8&#x27;h3a;
+      8&#x27;ha3: sbox = 8&#x27;h0a;
+      8&#x27;ha4: sbox = 8&#x27;h49;
+      8&#x27;ha5: sbox = 8&#x27;h06;
+      8&#x27;ha6: sbox = 8&#x27;h24;
+      8&#x27;ha7: sbox = 8&#x27;h5c;
+      8&#x27;ha8: sbox = 8&#x27;hc2;
+      8&#x27;ha9: sbox = 8&#x27;hd3;
+      8&#x27;haa: sbox = 8&#x27;hac;
+      8&#x27;hab: sbox = 8&#x27;h62;
+      8&#x27;hac: sbox = 8&#x27;h91;
+      8&#x27;had: sbox = 8&#x27;h95;
+      8&#x27;hae: sbox = 8&#x27;he4;
+      8&#x27;haf: sbox = 8&#x27;h79;
+      8&#x27;hb0: sbox = 8&#x27;he7;
+      8&#x27;hb1: sbox = 8&#x27;hc8;
+      8&#x27;hb2: sbox = 8&#x27;h37;
+      8&#x27;hb3: sbox = 8&#x27;h6d;
+      8&#x27;hb4: sbox = 8&#x27;h8d;
+      8&#x27;hb5: sbox = 8&#x27;hd5;
+      8&#x27;hb6: sbox = 8&#x27;h4e;
+      8&#x27;hb7: sbox = 8&#x27;ha9;
+      8&#x27;hb8: sbox = 8&#x27;h6c;
+      8&#x27;hb9: sbox = 8&#x27;h56;
+      8&#x27;hba: sbox = 8&#x27;hf4;
+      8&#x27;hbb: sbox = 8&#x27;hea;
+      8&#x27;hbc: sbox = 8&#x27;h65;
+      8&#x27;hbd: sbox = 8&#x27;h7a;
+      8&#x27;hbe: sbox = 8&#x27;hae;
+      8&#x27;hbf: sbox = 8&#x27;h08;
+      8&#x27;hc0: sbox = 8&#x27;hba;
+      8&#x27;hc1: sbox = 8&#x27;h78;
+      8&#x27;hc2: sbox = 8&#x27;h25;
+      8&#x27;hc3: sbox = 8&#x27;h2e;
+      8&#x27;hc4: sbox = 8&#x27;h1c;
+      8&#x27;hc5: sbox = 8&#x27;ha6;
+      8&#x27;hc6: sbox = 8&#x27;hb4;
+      8&#x27;hc7: sbox = 8&#x27;hc6;
+      8&#x27;hc8: sbox = 8&#x27;he8;
+      8&#x27;hc9: sbox = 8&#x27;hdd;
+      8&#x27;hca: sbox = 8&#x27;h74;
+      8&#x27;hcb: sbox = 8&#x27;h1f;
+      8&#x27;hcc: sbox = 8&#x27;h4b;
+      8&#x27;hcd: sbox = 8&#x27;hbd;
+      8&#x27;hce: sbox = 8&#x27;h8b;
+      8&#x27;hcf: sbox = 8&#x27;h8a;
+      8&#x27;hd0: sbox = 8&#x27;h70;
+      8&#x27;hd1: sbox = 8&#x27;h3e;
+      8&#x27;hd2: sbox = 8&#x27;hb5;
+      8&#x27;hd3: sbox = 8&#x27;h66;
+      8&#x27;hd4: sbox = 8&#x27;h48;
+      8&#x27;hd5: sbox = 8&#x27;h03;
+      8&#x27;hd6: sbox = 8&#x27;hf6;
+      8&#x27;hd7: sbox = 8&#x27;h0e;
+      8&#x27;hd8: sbox = 8&#x27;h61;
+      8&#x27;hd9: sbox = 8&#x27;h35;
+      8&#x27;hda: sbox = 8&#x27;h57;
+      8&#x27;hdb: sbox = 8&#x27;hb9;
+      8&#x27;hdc: sbox = 8&#x27;h86;
+      8&#x27;hdd: sbox = 8&#x27;hc1;
+      8&#x27;hde: sbox = 8&#x27;h1d;
+      8&#x27;hdf: sbox = 8&#x27;h9e;
+      8&#x27;he0: sbox = 8&#x27;he1;
+      8&#x27;he1: sbox = 8&#x27;hf8;
+      8&#x27;he2: sbox = 8&#x27;h98;
+      8&#x27;he3: sbox = 8&#x27;h11;
+      8&#x27;he4: sbox = 8&#x27;h69;
+      8&#x27;he5: sbox = 8&#x27;hd9;
+      8&#x27;he6: sbox = 8&#x27;h8e;
+      8&#x27;he7: sbox = 8&#x27;h94;
+      8&#x27;he8: sbox = 8&#x27;h9b;
+      8&#x27;he9: sbox = 8&#x27;h1e;
+      8&#x27;hea: sbox = 8&#x27;h87;
+      8&#x27;heb: sbox = 8&#x27;he9;
+      8&#x27;hec: sbox = 8&#x27;hce;
+      8&#x27;hed: sbox = 8&#x27;h55;
+      8&#x27;hee: sbox = 8&#x27;h28;
+      8&#x27;hef: sbox = 8&#x27;hdf;
+      8&#x27;hf0: sbox = 8&#x27;h8c;
+      8&#x27;hf1: sbox = 8&#x27;ha1;
+      8&#x27;hf2: sbox = 8&#x27;h89;
+      8&#x27;hf3: sbox = 8&#x27;h0d;
+      8&#x27;hf4: sbox = 8&#x27;hbf;
+      8&#x27;hf5: sbox = 8&#x27;he6;
+      8&#x27;hf6: sbox = 8&#x27;h42;
+      8&#x27;hf7: sbox = 8&#x27;h68;
+      8&#x27;hf8: sbox = 8&#x27;h41;
+      8&#x27;hf9: sbox = 8&#x27;h99;
+      8&#x27;hfa: sbox = 8&#x27;h2d;
+      8&#x27;hfb: sbox = 8&#x27;h0f;
+      8&#x27;hfc: sbox = 8&#x27;hb0;
+      8&#x27;hfd: sbox = 8&#x27;h54;
+      8&#x27;hfe: sbox = 8&#x27;hbb;
+      8&#x27;hff: sbox = 8&#x27;h16;
+        default: sbox = 8&#x27;h00;
+      endcase
+    end
+  endfunction
+
+  function automatic [7:0] rcon(input integer r);
+    begin
+      case (r)
+        1:  rcon = 8&#x27;h01;
+        2:  rcon = 8&#x27;h02;
+        3:  rcon = 8&#x27;h04;
+        4:  rcon = 8&#x27;h08;
+        5:  rcon = 8&#x27;h10;
+        6:  rcon = 8&#x27;h20;
+        7:  rcon = 8&#x27;h40;
+        8:  rcon = 8&#x27;h80;
+        9:  rcon = 8&#x27;h1b;
+        10: rcon = 8&#x27;h36;
+        default: rcon = 8&#x27;h00;
+      endcase
+    end
+  endfunction
+
+  function automatic [7:0] gm2(input [7:0] a);
+    gm2 = {a[6:0],1&#x27;b0} ^ (8&#x27;h1b &amp; {8{a[7]}});
+  endfunction
+
+  function automatic [7:0] gm3(input [7:0] a);
+    gm3 = gm2(a) ^ a;
+  endfunction
+
+  function automatic [127:0] sub_bytes(input [127:0] s);
+    integer i;
+    begin
+      for (i = 0; i &lt; 16; i = i + 1)
+        sub_bytes[127-8*i -: 8] = sbox(s[127-8*i -: 8]);
+    end
+  endfunction
+
+  // AES state is column-major: byte index = 4*column + row.
+  function automatic [127:0] shift_rows(input [127:0] s);
+    integer r, c, src_idx, dst_idx;
+    begin
+      for (c = 0; c &lt; 4; c = c + 1) begin
+        for (r = 0; r &lt; 4; r = r + 1) begin
+          src_idx = 4*((c+r)%4) + r;
+          dst_idx = 4*c + r;
+          shift_rows[127-8*dst_idx -: 8] = s[127-8*src_idx -: 8];
+        end
+      end
+    end
+  endfunction
+
+  function automatic [127:0] mix_columns(input [127:0] s);
+    integer c;
+    reg [7:0] a0, a1, a2, a3;
+    reg [7:0] b0, b1, b2, b3;
+    begin
+      for (c = 0; c &lt; 4; c = c + 1) begin
+        a0 = s[127-8*(4*c+0) -: 8];
+        a1 = s[127-8*(4*c+1) -: 8];
+        a2 = s[127-8*(4*c+2) -: 8];
+        a3 = s[127-8*(4*c+3) -: 8];
+
+        b0 = gm2(a0) ^ gm3(a1) ^ a2 ^ a3;
+        b1 = a0 ^ gm2(a1) ^ gm3(a2) ^ a3;
+        b2 = a0 ^ a1 ^ gm2(a2) ^ gm3(a3);
+        b3 = gm3(a0) ^ a1 ^ a2 ^ gm2(a3);
+
+        mix_columns[127-8*(4*c+0) -: 8] = b0;
+        mix_columns[127-8*(4*c+1) -: 8] = b1;
+        mix_columns[127-8*(4*c+2) -: 8] = b2;
+        mix_columns[127-8*(4*c+3) -: 8] = b3;
+      end
+    end
+  endfunction
+
+  function automatic [31:0] sub_word(input [31:0] w);
+    begin
+      sub_word = {sbox(w[31:24]), sbox(w[23:16]), sbox(w[15:8]), sbox(w[7:0])};
+    end
+  endfunction
+
+  function automatic [31:0] rot_word(input [31:0] w);
+    rot_word = {w[23:0], w[31:24]};
+  endfunction
+
+  function automatic [127:0] next_round_key(
+      input [127:0] key,
+      input [7:0] rc);
+    reg [31:0] w0, w1, w2, w3;
+    reg [31:0] n0, n1, n2, n3;
+    reg [31:0] t;
+    begin
+      w0 = key[127:96];
+      w1 = key[95:64];
+      w2 = key[63:32];
+      w3 = key[31:0];
+
+      t  = sub_word(rot_word(w3)) ^ {rc,24&#x27;h0};
+      n0 = w0 ^ t;
+      n1 = w1 ^ n0;
+      n2 = w2 ^ n1;
+      n3 = w3 ^ n2;
+
+      next_round_key = {n0,n1,n2,n3};
+    end
+  endfunction
+
+  logic [127:0] sb_sr_mc;
+  logic [127:0] final_state;
+  logic [127:0] key_next;
+
+  always_comb begin
+    key_next  = next_round_key(round_key_q, rcon(round_q));
+    sb_sr_mc  = mix_columns(shift_rows(sub_bytes(state_q)));
+    final_state = shift_rows(sub_bytes(state_q)) ^ key_next;
+  end
+
+  always_ff @(posedge clk or negedge rst_ni) begin
+    if (!rst_ni) begin
+      state_q     &lt;= 128&#x27;b0;
+      round_key_q &lt;= 128&#x27;b0;
+      round_q     &lt;= 4&#x27;d0;
+      block_o     &lt;= 128&#x27;b0;
+      busy_o      &lt;= 1&#x27;b0;
+      done_o      &lt;= 1&#x27;b0;
+    end else begin
+      done_o &lt;= 1&#x27;b0;
+
+      if (start_i &amp;&amp; !busy_o) begin
+        state_q     &lt;= block_i ^ key_i;  // AES AddRoundKey
+        round_key_q &lt;= key_i;
+        round_q     &lt;= 4&#x27;d1;
+        busy_o      &lt;= 1&#x27;b1;
+      end else if (busy_o) begin
+        if (round_q &lt; 4&#x27;d10) begin
+          state_q     &lt;= sb_sr_mc ^ key_next;
+          round_key_q &lt;= key_next;
+          round_q     &lt;= round_q + 4&#x27;d1;
+        end else begin
+          block_o     &lt;= final_state;
+          state_q     &lt;= final_state;
+          round_key_q &lt;= key_next;
+          busy_o      &lt;= 1&#x27;b0;
+          done_o      &lt;= 1&#x27;b1;
+          round_q     &lt;= 4&#x27;d0;
+        end
+      end
+    end
+  end
+endmodule
+</pre>
+</details>
+</section>
+
+<section class="section">
+<h2>10 · Step 7 — AES known-answer testbench</h2>
+<p>Use the standard AES-128 known-answer test:</p>
+<table>
+<tr><th>Input</th><th>Value</th></tr>
+<tr><td>Key</td><td><code>000102030405060708090a0b0c0d0e0f</code></td></tr>
+<tr><td>Plaintext</td><td><code>00112233445566778899aabbccddeeff</code></td></tr>
+<tr><td>Expected ciphertext</td><td><code>69c4e0d86a7b0430d8cdb78070b4c55a</code></td></tr>
+</table>
+<details open><summary>aes128_tb.sv</summary>
+<pre>module aes128_tb;
+  logic clk = 1'b0;
+  logic rst_ni = 1'b0;
+  logic start_i = 1'b0;
+  logic [127:0] key_i;
+  logic [127:0] block_i;
+  logic [127:0] block_o;
+  logic busy_o, done_o;
+
+  always #5 clk = ~clk;
+
+  aes128_iterative dut (
+    .clk(clk),
+    .rst_ni(rst_ni),
+    .start_i(start_i),
+    .key_i(key_i),
+    .block_i(block_i),
+    .block_o(block_o),
+    .busy_o(busy_o),
+    .done_o(done_o)
+  );
+
+  initial begin
+    key_i   = 128'h000102030405060708090a0b0c0d0e0f;
+    block_i = 128'h00112233445566778899aabbccddeeff;
+
+    #20;
+    rst_ni = 1'b1;
+    @(negedge clk);
+    start_i = 1'b1;
+    @(negedge clk);
+    start_i = 1'b0;
+
+    wait(done_o);
+
+    if (block_o === 128'h69c4e0d86a7b0430d8cdb78070b4c55a)
+      $display("PASS: AES-128 known-answer test");
+    else begin
+      $display("FAIL: got %h", block_o);
+      $fatal;
+    end
+
+    #20 $finish;
+  end
+endmodule</pre>
+</details>
+<p>Run from the project root:</p>
+<pre>iverilog -g2012 -o sim/aes_tb \
+  rtl/aes/aes128_iterative.sv tb/aes128_tb.sv
+
+vvp sim/aes_tb</pre>
+<div class="callout good"><b>Checkpoint B:</b> The simulator must print <code>PASS: AES-128 known-answer test</code>. Save the waveform and simulator log under <code>results/</code>.</div>
+</section>
+
+<section class="section">
+<h2>11 · Step 8 — Verilator verification</h2>
+<p>Use Verilator as the faster regression/lint path. The exact command depends on your installed version and whether you use a SystemVerilog testbench or a C++ harness.</p>
+<pre>verilator --lint-only -Wall \
+  rtl/aes/aes128_iterative.sv</pre>
+<p>For the CPU, do not invent a new source-file list. Start from the CV32E40P repository's manifest and its documented/example verification flow. The upstream repository explicitly notes that its small example testbench is for experimentation, while the broader CORE-V verification environment is separate.</p>
+<div class="callout">Recommended sequence: <b>lint → unit test → CPU/memory test → bridge protocol test → SoC regression.</b></div>
+</section>
+
+<section class="section">
+<h2>12 · Step 9 — the OBI → AXI conversion</h2>
+<p><b>Do not treat this as a wire rename.</b> OBI and AXI have different handshake semantics. Build a small transaction FSM.</p>
+<pre>CV32E40P
+  |
+  | data_req_o, data_addr_o, data_we_o,
+  | data_be_o, data_wdata_o
+  v
++-----------------------------+
+|       OBI → AXI4-Lite       |
+|                             |
+| IDLE                        |
+|  ↓                          |
+| CAPTURE OBI REQUEST         |
+|  ↓                          |
+| WRITE: AW + W → B           |
+| READ : AR → R               |
+|  ↓                          |
+| DRIVE OBI GNT / RVALID      |
++--------------+--------------+
+               |
+               v
+        AXI4-Lite master
+               |
+        +------+------+
+        | AXI SmartConnect
+        +------+------+
+               |
+       +-------+---------+
+       |       |         |
+      BRAM    AES       UART
+     ctrl     IP         IP</pre>
+<p>For the first version, use a <b>single-outstanding-transaction</b> bridge. That dramatically reduces the state space.</p>
+<table>
+<tr><th>OBI concept</th><th>Bridge action</th></tr>
+<tr><td><code>data_req_o=1</code></td><td>Capture one request when the bridge is idle.</td></tr>
+<tr><td><code>data_addr_o</code></td><td>Drive AXI address.</td></tr>
+<tr><td><code>data_we_o=1</code></td><td>AXI write transaction.</td></tr>
+<tr><td><code>data_be_o</code></td><td>AXI <code>WSTRB</code>.</td></tr>
+<tr><td><code>data_wdata_o</code></td><td>AXI <code>WDATA</code>.</td></tr>
+<tr><td>AXI <code>BVALID</code></td><td>Return completion to OBI.</td></tr>
+<tr><td>AXI <code>RVALID/RDATA</code></td><td>Return read completion/data to OBI.</td></tr>
+</table>
+<div class="callout warn"><b>Research-quality requirement:</b> add assertions for “one request captured at a time”, correct byte strobes, no lost response, and no OBI completion before the corresponding AXI response.</div>
+<p><b>Instruction path:</b> keep it separate initially. Use an instruction-memory adapter/bridge and a BRAM-backed instruction memory. Once the system works, optimize instruction fetch with AXI4 rather than forcing every fetch through AXI4-Lite.</p>
+</section>
+
+<section class="section">
+<h2>13 · Step 10 — memory map for the AES accelerator</h2>
+<p>Use a simple 32-bit AXI4-Lite register interface. One possible map:</p>
+<table>
+<tr><th>Address</th><th>Register</th><th>Use</th></tr>
+<tr><td>0x00</td><td>CTRL</td><td>bit 0 = START</td></tr>
+<tr><td>0x04</td><td>STATUS</td><td>bit 0 = BUSY, bit 1 = DONE</td></tr>
+<tr><td>0x10–0x1C</td><td>KEY0–KEY3</td><td>128-bit AES key</td></tr>
+<tr><td>0x20–0x2C</td><td>DATA0–DATA3</td><td>128-bit plaintext</td></tr>
+<tr><td>0x30–0x3C</td><td>OUT0–OUT3</td><td>128-bit ciphertext</td></tr>
+<tr><td>0x40</td><td>CONFIG</td><td>Future mode selection: sharing/pipeline/security mode</td></tr>
+</table>
+<p>When software writes START, the AXI wrapper produces a one-cycle <code>start_i</code> pulse for the AES core. When <code>done_o</code> rises, STATUS.DONE becomes visible and the result registers contain the ciphertext.</p>
+</section>
+
+<section class="section">
+<h2>14 · Step 11 — package AES as custom Vivado IP</h2>
+<ol>
+<li>Create a Vivado project for the target FPGA.</li>
+<li>Add <code>aes128_iterative.sv</code> to the RTL sources.</li>
+<li>Validate simulation and synthesis before packaging.</li>
+<li>Use <b>Tools → Create and Package New IP</b>.</li>
+<li>Choose a new AXI4 peripheral if using the register-map architecture above.</li>
+<li>Expose the AXI4-Lite slave interface and clock/reset.</li>
+<li>Package the IP and add its repository path to the Vivado IP catalog.</li>
+</ol>
+<div class="callout good">Do not package an unverified block. First simulate and synthesize the standalone AES; then package it.</div>
+</section>
+
+<section class="section" id="vivado">
+<h2>15 · Step 12 — Vivado block design</h2>
+<pre>                  +------------------+
+                  |    CV32E40P      |
+                  +--------+---------+
+                           |
+                         OBI
+                           |
+                  +--------v---------+
+                  | OBI → AXI bridge |
+                  +--------+---------+
+                           |
+                         AXI
+                           |
+                  +--------v---------+
+                  | AXI SmartConnect |
+                  +---+----------+---+
+                      |          |
+                    BRAM        AES
+                 controller      IP
+                      |          |
+                 instruction   registers
+                    /data        |
+                               AES core</pre>
+<p>In IP Integrator, the “automatic wiring” your friend mentioned is mainly the interface-aware automation around AXI IP. It does not remove the need to define your CPU-side OBI adapter.</p>
+<ol>
+<li>Add the CV32E40P RTL wrapper.</li>
+<li>Add instruction/data memory blocks or BRAM controllers.</li>
+<li>Add your OBI-to-AXI bridge.</li>
+<li>Add the packaged AES AXI4-Lite peripheral.</li>
+<li>Add clock/reset infrastructure.</li>
+<li>Run address assignment.</li>
+<li>Run <b>Validate Design</b>.</li>
+<li>Generate the HDL wrapper.</li>
+</ol>
+</section>
+
+<section class="section">
+<h2>16 · Step 13 — choose the FPGA board</h2>
+<div class="callout good"><b>Selected target: Digilent Nexys A7-100T.</b></div>
+<p>Target part: <code>XC7A100T-1CSG324C</code>. It provides 15,850 Artix-7 slices, 4,860 Kbits of BRAM, 240 DSP slices, 128 MiB DDR2, USB-JTAG/UART and 10/100 Ethernet. This is a more comfortable target than a 35T board for a CPU + bridge + AES + instrumentation research design.</p>
+<p>Use the board's official master XDC/reference material for exact pins. Do not copy pin assignments from a different board.</p>
+<div class="callout warn"><b>Do not hard-code a guessed XDC.</b> Download/use the official Nexys A7-100T master XDC and uncomment only the ports you actually expose.</div>
+</section>
+
+<section class="section">
+<h2>17 · Step 14 — constraints</h2>
+<p>At minimum, constrain the primary clock and all external I/O used by the design.</p>
+<pre>## Illustrative clock constraint only.
+## Use the actual Nexys A7 clock port name from the official master XDC.
+
+create_clock -period 10.000 [get_ports clk]</pre>
+<p>10 ns corresponds to a 100 MHz target. The actual board clock and your chosen clock-generation scheme must be reflected in the XDC and clocking IP.</p>
+</section>
+
+<section class="section">
+<h2>18 · Step 15 — synthesis</h2>
+<ol>
+<li>Run <b>Run Synthesis</b>.</li>
+<li>Check for critical warnings first.</li>
+<li>Record LUT, FF, BRAM, DSP and clocking resources.</li>
+<li>Open the synthesized design and inspect the critical path.</li>
+<li>Export the utilization report to <code>results/synthesis/</code>.</li>
+</ol>
+<div class="grid">
+<div class="card"><h3>Baseline metrics</h3><p>Record LUTs, FFs, BRAM, DSP, clock resources.</p></div>
+<div class="card"><h3>Performance</h3><p>Record estimated/implemented Fmax and critical-path delay.</p></div>
+<div class="card"><h3>Architecture</h3><p>Record AES latency in cycles and CPU-to-AES transaction overhead.</p></div>
+</div>
+</section>
+
+<section class="section">
+<h2>19 · Step 16 — implementation + timing</h2>
+<pre>Synthesis
+   ↓
+optimize
+   ↓
+place
+   ↓
+route
+   ↓
+timing analysis
+   ↓
+bitstream</pre>
+<p>Do not report synthesis frequency as final hardware performance. After implementation, record:</p>
+<table>
+<tr><th>Metric</th><th>Report</th></tr>
+<tr><td>WNS</td><td>Worst negative slack; target should be non-negative for a clean timing result.</td></tr>
+<tr><td>TNS</td><td>Total negative slack.</td></tr>
+<tr><td>Fmax</td><td>Derived from the limiting timing path.</td></tr>
+<tr><td>Latency</td><td>Cycles from accelerator start to done.</td></tr>
+<tr><td>Throughput</td><td>Blocks/second or Gb/s at measured clock frequency.</td></tr>
+<tr><td>Power</td><td>Use a defined Vivado power-estimation/measurement methodology.</td></tr>
+</table>
+</section>
+
+<section class="section">
+<h2>20 · Step 17 — bitstream and FPGA programming</h2>
+<pre>Generate Bitstream
+        ↓
+Open Hardware Manager
+        ↓
+Open Target
+        ↓
+Auto Connect
+        ↓
+Program Device
+        ↓
+Select .bit
+        ↓
+Program</pre>
+<p>For first bring-up, make the board visibly prove that the clock/reset system works. Then expose AES DONE on an LED or UART path before introducing the CPU software path.</p>
+</section>
+
+<section class="section">
+<h2>21 · Step 18 — ILA hardware debug</h2>
+<p>Add an Integrated Logic Analyzer before the final bitstream. Capture:</p>
+<div class="grid">
+<div class="card"><b>CPU</b><br>PC / fetch request / data request</div>
+<div class="card"><b>OBI</b><br>request, address, write enable, byte enables, grant, response valid</div>
+<div class="card"><b>AXI</b><br>AWVALID/AWREADY, WVALID/WREADY, BVALID/BREADY, ARVALID/ARREADY, RVALID/RREADY</div>
+<div class="card"><b>AES</b><br>START, BUSY, DONE, round counter, result-valid</div>
+</div>
+<div class="callout">This is the difference between “the FPGA doesn't work” and a reproducible hardware-debug experiment: you can identify whether the failure is in software, OBI, bridge, AXI, register mapping, AES control or the datapath.</div>
+</section>
+
+<section class="section">
+<h2>22 · Step 19 — software path and Vitis</h2>
+<p>Vitis is <b>not required at the beginning</b>. Introduce it after Vivado can produce a stable hardware platform.</p>
+<pre>Vivado block design
+      ↓
+Generate bitstream
+      ↓
+Export hardware platform (.xsa)
+      ↓
+Vitis
+      ↓
+RISC-V software/application layer
+      ↓
+Memory-mapped AES writes/reads
+      ↓
+FPGA execution</pre>
+<p>For the final paper, compare at least:</p>
+<ul>
+<li>software-only AES;</li>
+<li>hardware AES accelerator;</li>
+<li>hardware AES with different sharing/pipeline/security configurations;</li>
+<li>CPU + accelerator communication overhead.</li>
+</ul>
+</section>
+
+<section class="section">
+<h2>23 · Step 20 — turn the baseline into the research contribution</h2>
+<table>
+<tr><th>Version</th><th>Architecture</th><th>What you measure</th></tr>
+<tr><td>V0</td><td>Software AES</td><td>cycles, throughput, energy estimate</td></tr>
+<tr><td>V1</td><td>LUT-based iterative AES</td><td>LUT/FF/Fmax/latency/power</td></tr>
+<tr><td>V2</td><td>Composite-field S-box</td><td>area/timing delta vs V1</td></tr>
+<tr><td>V3</td><td>Reusable GF engine</td><td>sharing benefit and contention</td></tr>
+<tr><td>V4</td><td>Configurable sharing/pipeline modes</td><td>PPA Pareto points</td></tr>
+<tr><td>V5</td><td>Security-aware mode</td><td>leakage metric + security overhead</td></tr>
+<tr><td>V6</td><td>RISC-V SoC integration</td><td>end-to-end system performance</td></tr>
+</table>
+<p>The final research question becomes something measurable, for example:</p>
+<div class="callout good"><b>Can one reusable GF-based RISC-V AES accelerator expose useful PPA/security operating points through controlled architectural sharing and scheduling, while maintaining a measurable advantage over fixed AES accelerator baselines?</b></div>
+</section>
+
+<section class="section">
+<h2>24 · Verification plan</h2>
+<div class="grid">
+<div class="card"><h3>Functional</h3><p>AES-128 known-answer tests, random plaintext/key tests, reset/start/busy/done corner cases.</p></div>
+<div class="card"><h3>Protocol</h3><p>OBI request/response assertions, AXI handshake assertions, byte-strobe tests, back-to-back accesses.</p></div>
+<div class="card"><h3>Integration</h3><p>RISC-V program writes registers, starts AES, polls/interrupts on completion and reads ciphertext.</p></div>
+<div class="card"><h3>Hardware</h3><p>ILA captures, UART output, repeated FPGA runs and reproducible bitstream/configuration.</p></div>
+</div>
+</section>
+
+<section class="section">
+<h2>25 · PPA/security experiment matrix</h2>
+<table>
+<tr><th>Design</th><th>Sharing</th><th>Pipeline</th><th>S-box</th><th>Security mode</th><th>Purpose</th></tr>
+<tr><td>A</td><td>None</td><td>Iterative</td><td>LUT</td><td>None</td><td>Reference</td></tr>
+<tr><td>B</td><td>GF shared</td><td>Iterative</td><td>CFA</td><td>None</td><td>Area/resource study</td></tr>
+<tr><td>C</td><td>GF shared</td><td>Pipelined</td><td>CFA</td><td>None</td><td>Frequency study</td></tr>
+<tr><td>D</td><td>Configurable</td><td>Configurable</td><td>CFA</td><td>Hiding/masking candidate</td><td>PPA × security study</td></tr>
+</table>
+<p>Do not call D “secure” solely because a countermeasure was added. Report the actual evaluation conditions and measured leakage/security result.</p>
+</section>
+
+<section class="section">
+<h2>26 · Git discipline</h2>
+<pre>git add .
+git commit -m "Add AES-128 baseline accelerator and testbench"
+git push origin main</pre>
+<p>Use separate commits for CPU integration, bridge, AES baseline, AXI wrapper, constraints, ILA and research variants. This makes experimental comparison reproducible.</p>
+</section>
+
+<section class="section">
+<h2>27 · Final research-grade checklist</h2>
+<p class="check">☐ WSL2 + Ubuntu installed</p>
+<p class="check">☐ Git repository cloned and pinned</p>
+<p class="check">☐ CV32E40P manifest/source structure understood</p>
+<p class="check">☐ CPU works against OBI behavioral memory</p>
+<p class="check">☐ AES baseline passes known-answer tests</p>
+<p class="check">☐ AES lint passes</p>
+<p class="check">☐ OBI→AXI bridge verified independently</p>
+<p class="check">☐ AXI register map documented</p>
+<p class="check">☐ AES packaged as custom Vivado IP</p>
+<p class="check">☐ Vivado block design validates</p>
+<p class="check">☐ Nexys A7-100T XDC is correct for the actual board</p>
+<p class="check">☐ Synthesis utilization recorded</p>
+<p class="check">☐ Implementation timing closes</p>
+<p class="check">☐ Bitstream generated</p>
+<p class="check">☐ FPGA programmed</p>
+<p class="check">☐ ILA captures OBI/AXI/AES transactions</p>
+<p class="check">☐ Software drives accelerator correctly</p>
+<p class="check">☐ Baseline vs research variants measured under identical conditions</p>
+<p class="check">☐ Security evaluation has an explicit threat model and metric</p>
+</section>
+
+<section class="section">
+<h2>28 · Official references</h2>
+<ul>
+<li>OpenHW CV32E40P repository and user manual.</li>
+<li>OpenHW OBI specification.</li>
+<li>AMD Vivado IP Integrator / custom IP packaging documentation.</li>
+<li>Digilent Nexys A7-100T product page and reference manual.</li>
+</ul>
+<p class="small">Keep the exact tool versions, FPGA part number, board revision, synthesis settings and source commit hash in the final paper/repository.</p>
+</section>
+
+</main>
+<footer>AES Research Lab · CV32E40P × reusable GF × PPA/security-aware AES accelerator · reproducible implementation workspace</footer>
+</body>
+</html>
